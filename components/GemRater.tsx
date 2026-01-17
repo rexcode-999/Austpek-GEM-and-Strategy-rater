@@ -1,10 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { GemReport } from '../types';
-import { rateCreative } from '../services/geminiService';
-import { Upload, FileVideo, FileImage, CheckCircle, AlertCircle, Zap, Eye, MousePointer, Target } from 'lucide-react';
+import { GemReport, AiProvider } from '../types';
+import { rateCreative as rateCreativeGemini } from '../services/geminiService';
+import { rateCreativeOpenAI } from '../services/openaiService';
+import { Upload, FileVideo, FileImage, CheckCircle, AlertCircle, Zap, Eye, MousePointer, Target, Bot } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 
-export const GemRater: React.FC = () => {
+interface GemRaterProps {
+  provider: AiProvider;
+}
+
+export const GemRater: React.FC<GemRaterProps> = ({ provider }) => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [report, setReport] = useState<GemReport | null>(null);
@@ -16,9 +21,9 @@ export const GemRater: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
       
-      // Basic validation
-      if (selectedFile.size > 100 * 1024 * 1024) {
-        setError("File size exceeds 100MB limit.");
+      // Inline Data Limit: ~20MB for Gemini API text-based payloads
+      if (selectedFile.size > 20 * 1024 * 1024) {
+        setError("File size exceeds 20MB limit for inline analysis.");
         return;
       }
 
@@ -43,10 +48,17 @@ export const GemRater: React.FC = () => {
     try {
       // Extract base64 data (remove "data:image/png;base64," prefix)
       const base64Data = preview.split(',')[1];
-      const result = await rateCreative(base64Data, file.type);
+      let result;
+      
+      if (provider === AiProvider.OPENAI) {
+        result = await rateCreativeOpenAI(base64Data, file.type);
+      } else {
+        result = await rateCreativeGemini(base64Data, file.type);
+      }
+      
       setReport(result);
-    } catch (err) {
-      setError("Failed to analyze creative. Please try again or use a smaller file.");
+    } catch (err: any) {
+      setError(err.message || "Failed to analyze creative. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -123,7 +135,7 @@ export const GemRater: React.FC = () => {
                     </div>
                     <div>
                         <h3 className="text-xl font-semibold text-white">Upload Creative</h3>
-                        <p className="text-slate-400 mt-2 text-sm">Drop your image or video here (Max 100MB)</p>
+                        <p className="text-slate-400 mt-2 text-sm">Drop your image or video here (Max 20MB)</p>
                     </div>
                 </div>
             ) : (
@@ -154,16 +166,22 @@ export const GemRater: React.FC = () => {
 
         {loading && (
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 text-center space-y-4">
-                <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                {provider === AiProvider.OPENAI ? (
+                    <div className="w-12 h-12 border-4 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                ) : (
+                    <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                )}
                 <p className="text-emerald-400 font-medium">Analyzing visual signals and textures...</p>
-                <p className="text-slate-500 text-sm">Using Gemini 3 Pro Vision</p>
+                <p className="text-slate-500 text-sm">
+                    Using {provider === AiProvider.OPENAI ? 'OpenAI GPT-4o' : 'Gemini 3 Pro'} Vision
+                </p>
             </div>
         )}
 
         {error && (
              <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center">
-                <AlertCircle className="mr-3" />
-                {error}
+                <AlertCircle className="mr-3 flex-shrink-0" />
+                <span className="font-medium">{error}</span>
             </div>
         )}
       </div>
@@ -227,7 +245,11 @@ export const GemRater: React.FC = () => {
             </div>
         ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-800 rounded-2xl p-12 bg-slate-900/30">
-                <Target size={48} className="mb-4 opacity-50" />
+                {provider === AiProvider.OPENAI ? (
+                    <Bot size={48} className="mb-4 opacity-50 text-green-400" />
+                ) : (
+                    <Target size={48} className="mb-4 opacity-50 text-emerald-400" />
+                )}
                 <p className="text-lg font-medium">Awaiting Creative Asset</p>
                 <p className="text-sm">Upload an image or video to begin analysis.</p>
             </div>

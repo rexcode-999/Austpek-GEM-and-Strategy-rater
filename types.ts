@@ -7,6 +7,16 @@ export interface TrendItem {
   hashtags: string[];
 }
 
+export interface WebSource {
+  title: string;
+  uri: string;
+}
+
+export interface TrendResponse {
+  trends: TrendItem[];
+  sources: WebSource[];
+}
+
 export interface GemScoreBreakdown {
   creativeDiversity: number; // 0-25
   visualSignal: number; // 0-25
@@ -30,4 +40,9 @@ export interface GemReport {
 export enum AppTab {
   TRENDS = 'trends',
   RATER = 'rater',
+}
+
+export enum AiProvider {
+  GEMINI = 'gemini',
+  OPENAI = 'openai',
 }

@@ -1,31 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { TrendItem } from '../types';
-import { fetchTrends } from '../services/geminiService';
+import { TrendItem, WebSource, AiProvider } from '../types';
+import { fetchTrends as fetchTrendsGemini } from '../services/geminiService';
+import { fetchTrendsOpenAI } from '../services/openaiService';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { RefreshCw, TrendingUp, Globe, MapPin, Hash, AlertTriangle } from 'lucide-react';
+import { RefreshCw, TrendingUp, Globe, MapPin, Hash, AlertTriangle, ExternalLink, Bot, Zap } from 'lucide-react';
 
-export const TrendScraper: React.FC = () => {
+interface TrendScraperProps {
+  provider: AiProvider;
+}
+
+export const TrendScraper: React.FC<TrendScraperProps> = ({ provider }) => {
   const [trends, setTrends] = useState<TrendItem[]>([]);
+  const [sources, setSources] = useState<WebSource[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadTrends = async () => {
     setLoading(true);
     setError(null);
+    setSources([]); // Clear sources on new load
     try {
-      const data = await fetchTrends();
-      setTrends(data);
-    } catch (err) {
-      setError("Failed to fetch viral trends. Please try again.");
+      let data;
+      if (provider === AiProvider.OPENAI) {
+        data = await fetchTrendsOpenAI();
+      } else {
+        data = await fetchTrendsGemini();
+      }
+      setTrends(data.trends);
+      setSources(data.sources);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch viral trends. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Reload when provider changes
   useEffect(() => {
     loadTrends();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [provider]);
 
   const getRegionColor = (region: string) => {
     switch (region) {
@@ -78,10 +92,19 @@ export const TrendScraper: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-center bg-slate-900 p-6 rounded-2xl border border-slate-800">
         <div>
             <h2 className="text-2xl font-bold text-white flex items-center">
-            <Globe className="mr-3 text-emerald-500" />
+            {provider === AiProvider.OPENAI ? (
+               <Bot className="mr-3 text-green-400" />
+            ) : (
+               <Zap className="mr-3 text-blue-400" />
+            )}
             Global Trend Scraper
             </h2>
-            <p className="text-slate-400 mt-1">Real-time analysis of US, UK, and AU bathroom design topics.</p>
+            <p className="text-slate-400 mt-1">
+                Real-time analysis of US, UK, and AU bathroom design topics. 
+                <span className="text-slate-500 text-xs ml-2 border border-slate-700 rounded px-1.5 py-0.5">
+                    Powered by {provider === AiProvider.OPENAI ? 'GPT-4o' : 'Gemini 3 Flash'}
+                </span>
+            </p>
         </div>
         <button
           onClick={loadTrends}
@@ -99,8 +122,8 @@ export const TrendScraper: React.FC = () => {
 
       {error && (
         <div className="bg-red-500/10 border border-red-500/50 text-red-200 p-4 rounded-xl flex items-center">
-            <AlertTriangle className="mr-3" />
-            {error}
+            <AlertTriangle className="mr-3 flex-shrink-0" />
+            <span className="font-medium">{error}</span>
         </div>
       )}
 
@@ -121,7 +144,7 @@ export const TrendScraper: React.FC = () => {
                 </div>
             </div>
 
-            <div className="lg:col-span-1">
+            <div className="lg:col-span-1 space-y-6">
                 <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-6">
                     <h3 className="text-lg font-semibold text-white mb-6">Viral Velocity Comparison</h3>
                     <div className="h-64 w-full">
@@ -150,6 +173,37 @@ export const TrendScraper: React.FC = () => {
                         </div>
                     </div>
                 </div>
+
+                {/* Grounding sources only available via Gemini */}
+                {sources.length > 0 && (
+                  <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h3 className="text-lg font-semibold text-white mb-4">Search Sources</h3>
+                    <ul className="space-y-2">
+                      {sources.map((source, idx) => (
+                        <li key={idx}>
+                          <a 
+                            href={source.uri} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="flex items-center text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+                          >
+                            <ExternalLink size={12} className="mr-2" />
+                            <span className="truncate">{source.title}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
+                {provider === AiProvider.OPENAI && sources.length === 0 && (
+                    <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 opacity-60">
+                        <p className="text-xs text-slate-400 flex items-center">
+                            <AlertTriangle size={12} className="mr-2" />
+                            Web grounding sources not available with OpenAI provider.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
       )}
